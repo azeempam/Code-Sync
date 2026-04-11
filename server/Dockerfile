@@ -3,7 +3,7 @@ FROM node:18-alpine AS builder
 
 WORKDIR /build
 
-# Copy package files and install dependencies
+# Copy package files and install all dependencies (including dev)
 COPY package*.json ./
 
 RUN npm ci
@@ -12,21 +12,22 @@ RUN npm ci
 COPY . .
 
 RUN npm run build
-RUN npm prune --omit=dev
 
-# Stage 2: Copy only the `dist` folder
+# Stage 2: Production image — only runtime deps
 FROM node:18-alpine AS runner
 
 WORKDIR /app
 
-# Copy the `dist` folder from the builder stage
-COPY --from=builder /build/dist dist/
-COPY --from=builder /build/public public/
-COPY --from=builder /build/node_modules /node_modules
-COPY --from=builder /build/package*.json .
+# Copy package files and install production-only dependencies
+COPY package*.json ./
+RUN npm ci --omit=dev
 
-# Optional Expose a port
+# Copy compiled output and static files from builder
+COPY --from=builder /build/dist ./dist
+COPY --from=builder /build/public ./public
+
+# Expose the port
 EXPOSE 3000
 
 # Start the server
-CMD ["npm", "run", "start"]
+CMD ["node", "dist/server.js"]

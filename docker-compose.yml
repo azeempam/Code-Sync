@@ -5,13 +5,19 @@ services:
       context: ./server
       dockerfile: Dockerfile
       target: runner
-    volumes:
-      - ./server:/app
-      - /build/node_modules
+    restart: unless-stopped
     networks:
       - Code-Sync
     ports:
       - "3000:3000"
+    environment:
+      - NODE_ENV=production
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
 
   client:
     container_name: code-sync-client
@@ -19,15 +25,14 @@ services:
       context: ./client
       dockerfile: Dockerfile
       target: runner
-    volumes:
-      - ./client:/app
-      - /build/node_modules
+    restart: unless-stopped
     networks:
       - Code-Sync
     ports:
       - "5173:5173"
     depends_on:
-      - server
+      server:
+        condition: service_healthy
 
 networks:
   Code-Sync:
