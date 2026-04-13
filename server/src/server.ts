@@ -6,6 +6,9 @@ import { SocketEvent, SocketId } from "./types/socket"
 import { USER_CONNECTION_STATUS, User } from "./types/user"
 import { Server } from "socket.io"
 import path from "path"
+import { ChildProcess } from "child_process"
+import { executeCode } from "./executor/CodeExecutor"
+import languageMap from "./executor/languageMap"
 
 dotenv.config()
 
@@ -27,6 +30,12 @@ const io = new Server(server, {
 })
 
 let userSocketMap: User[] = []
+
+/**
+ * Per-socket registry of the currently running child process.
+ * Used to kill jobs on socket disconnect or explicit run:kill.
+ */
+const runningJobs = new Map<string, ChildProcess>()
 
 // Function to get all users in a room
 function getUsersInRoom(roomId: string): User[] {
@@ -84,6 +93,14 @@ io.on("connection", (socket) => {
 	})
 
 	socket.on("disconnecting", () => {
+		// Kill any running code execution job for this socket
+		const job = runningJobs.get(socket.id)
+		if (job) {
+			try { job.kill("SIGKILL") } catch { /* ignore */ }
+			runningJobs.delete(socket.id)
+		}
+
+		// Notify room peers
 		const user = getUserBySocketId(socket.id)
 		if (!user) return
 		const roomId = user.roomId
@@ -283,9 +300,80 @@ io.on("connection", (socket) => {
 			snapshot,
 		})
 	})
+
+	// ── Code Execution ───────────────────────────────────────────────────────
+
+	/**
+	 * Payload: { code: string; language: string; stdin?: string }
+	 * The handler is scoped to the requesting socket only — other users in the
+	 * same room do NOT receive stdout/stderr (execution is private to the runner).
+	 */
+	socket.on(
+		SocketEvent.RUN_CODE,
+		async ({ code, language, stdin }: { code: string; language: string; stdin?: string }) => {
+			// Kill any previously running job for this socket
+			const existing = runningJobs.get(socket.id)
+			if (existing) {
+				try { existing.kill("SIGKILL") } catch { /* ignore */ }
+				runningJobs.delete(socket.id)
+			}
+
+			io.to(socket.id).emit(SocketEvent.RUN_STARTED, { language })
+
+			const child = await executeCode(
+				{ code, language, stdin },
+				{
+					onStdout: (chunk) =>
+						io.to(socket.id).emit(SocketEvent.RUN_STDOUT, { data: chunk }),
+
+					onStderr: (chunk) =>
+						io.to(socket.id).emit(SocketEvent.RUN_STDERR, { data: chunk }),
+
+					onDone: (payload) => {
+						runningJobs.delete(socket.id)
+						io.to(socket.id).emit(SocketEvent.RUN_DONE, payload)
+					},
+
+					onError: (message) => {
+						runningJobs.delete(socket.id)
+						io.to(socket.id).emit(SocketEvent.RUN_ERROR, { message })
+					},
+				}
+			)
+
+			if (child) runningJobs.set(socket.id, child)
+		}
+	)
+
+	/** Client requests explicit kill of the current job (e.g. user presses ⏹) */
+	socket.on(SocketEvent.RUN_KILL, () => {
+		const job = runningJobs.get(socket.id)
+		if (job) {
+			try { job.kill("SIGKILL") } catch { /* ignore */ }
+			runningJobs.delete(socket.id)
+			io.to(socket.id).emit(SocketEvent.RUN_DONE, {
+				exitCode: null, signal: "SIGKILL", timedOut: false, durationMs: 0,
+			})
+		}
+	})
+
 })
 
 const PORT = process.env.PORT || 3000
+
+/**
+ * GET /api/languages
+ * Returns the list of languages supported by the local CodeExecutor so the
+ * client can populate its language selector without depending on Piston.
+ */
+app.get("/api/languages", (_req: Request, res: Response) => {
+	const languages = Object.keys(languageMap).map((key) => ({
+		language: key,
+		version: "",
+		aliases: [key],
+	}))
+	res.json(languages)
+})
 
 app.get("/", (req: Request, res: Response) => {
 	// Send the index.html file

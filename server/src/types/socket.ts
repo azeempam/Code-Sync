@@ -27,6 +27,22 @@ enum SocketEvent {
 	REQUEST_DRAWING = "request-drawing",
 	SYNC_DRAWING = "sync-drawing",
 	DRAWING_UPDATE = "drawing-update",
+
+	// ── Code Execution ────────────────────────────────────────────────────
+	/** Client → Server: submit code for execution */
+	RUN_CODE       = "run:code",
+	/** Client → Server: kill the currently running job */
+	RUN_KILL       = "run:kill",
+	/** Server → Client: a chunk of stdout */
+	RUN_STDOUT     = "run:stdout",
+	/** Server → Client: a chunk of stderr */
+	RUN_STDERR     = "run:stderr",
+	/** Server → Client: process exited (normal or timeout) */
+	RUN_DONE       = "run:done",
+	/** Server → Client: infrastructure / unsupported-language error */
+	RUN_ERROR      = "run:error",
+	/** Server → Client: execution started acknowledgement */
+	RUN_STARTED    = "run:started",
 }
 
 interface SocketContext {

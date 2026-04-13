@@ -61,12 +61,13 @@ def is_leak(window: deque[float]) -> bool:
 def sample_process(proc: psutil.Process) -> dict:
     """
     Collect one metric snapshot for a process.
-    cpu_percent(interval=CPU_SAMPLE_INTERVAL) blocks for CPU_SAMPLE_INTERVAL
-    but is cheap (≪ 1 % CPU on a 16-thread i7).
+    cpu_percent(interval=None) is non-blocking — it returns the percentage
+    since the previous call.  The caller is responsible for sleeping
+    POLL_INTERVAL between calls so the measurement window is correct.
     """
     with proc.oneshot():
-        cpu   = proc.cpu_percent(interval=CPU_SAMPLE_INTERVAL)
-        mem   = proc.memory_info().rss / (1024 * 1024)   # bytes → MB
+        cpu     = proc.cpu_percent(interval=None)   # non-blocking
+        mem     = proc.memory_info().rss / (1024 * 1024)   # bytes → MB
         threads = proc.num_threads()
 
     return {
@@ -103,11 +104,20 @@ async def monitor_loop(pid: int) -> None:
         print(f"[Aura-Next Monitor] Watching PID {pid} "
               f"on {LOGICAL_CORES}-thread i7 @ {POLL_INTERVAL*1000:.0f} ms")
 
+        # Prime the cpu_percent counter (first call always returns 0.0 with
+        # interval=None; the sleep below provides the measurement window).
+        proc.cpu_percent(interval=None)
+
         while True:
+            # Yield to the event loop for the full poll interval so that
+            # incoming Socket.io events (start/stop/connect) are never blocked.
+            await asyncio.sleep(POLL_INTERVAL)
+
             if not proc.is_running() or proc.status() == psutil.STATUS_ZOMBIE:
                 await sio.emit("process_ended", {"pid": pid})
                 break
 
+            # Non-blocking — returns % since the asyncio.sleep above.
             metrics = sample_process(proc)
 
             # ── Memory-leak detection ──────────────────────────────────────
@@ -119,8 +129,6 @@ async def monitor_loop(pid: int) -> None:
 
             # ── Broadcast ─────────────────────────────────────────────────
             await sio.emit("metrics", metrics)
-
-            await asyncio.sleep(max(0, POLL_INTERVAL - CPU_SAMPLE_INTERVAL))
 
     except psutil.NoSuchProcess:
         await sio.emit("process_ended", {"pid": pid})

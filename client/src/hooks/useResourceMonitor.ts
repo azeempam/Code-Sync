@@ -110,7 +110,11 @@ export function useResourceMonitor(): UseResourceMonitorResult {
     // ── Public API ────────────────────────────────────────────────────────────
 
     const startMonitoring = useCallback((pid: number) => {
-        if (!socketRef.current?.connected) return
+        if (!socketRef.current) return
+        // Do NOT guard on .connected — socket.io-client buffers emits
+        // until the connection is established. Guarding on .connected
+        // causes a race condition where the emit is silently dropped
+        // if the user clicks Start before the async handshake completes.
         setMetrics([])
         setLeakWarning(false)
         socketRef.current.emit("start_monitoring", { pid })
