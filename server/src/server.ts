@@ -9,6 +9,7 @@ import path from "path"
 import { ChildProcess } from "child_process"
 import { executeCode } from "./executor/CodeExecutor"
 import languageMap from "./executor/languageMap"
+import * as pty from "node-pty"
 
 dotenv.config()
 
@@ -30,6 +31,11 @@ const io = new Server(server, {
 })
 
 let userSocketMap: User[] = []
+
+/**
+ * Map of socket ID to PTY process for terminal sessions.
+ */
+const terminalProcesses = new Map<string, pty.IPty>()
 
 /**
  * Per-socket registry of the currently running child process.
@@ -120,11 +126,31 @@ io.on("connection", (socket) => {
 	})
 
 	socket.on("disconnecting", () => {
+		console.log(`\n🔌 [DISCONNECTING] Socket: ${socket.id.substring(0, 8)}...`)
+		
 		// Kill any running code execution job for this socket
 		const job = runningJobs.get(socket.id)
 		if (job) {
-			try { job.kill("SIGKILL") } catch { /* ignore */ }
+			try {
+				console.log(`   💀 Killing running job...`)
+				job.kill("SIGKILL")
+			} catch (e) {
+				console.warn(`   ⚠️  Failed to kill job:`, e)
+			}
 			runningJobs.delete(socket.id)
+		}
+
+		// Kill terminal PTY process
+		const ptyProcess = terminalProcesses.get(socket.id)
+		if (ptyProcess) {
+			try {
+				console.log(`   💀 Killing PTY process (PID: ${ptyProcess.pid})...`)
+				ptyProcess.kill()
+			} catch (e) {
+				console.warn(`   ⚠️  Failed to kill PTY:`, e)
+			}
+			terminalProcesses.delete(socket.id)
+			console.log(`   ✅ PTY cleanup complete`)
 		}
 
 		// Notify room peers
@@ -381,6 +407,103 @@ io.on("connection", (socket) => {
 			io.to(socket.id).emit(SocketEvent.RUN_DONE, {
 				exitCode: null, signal: "SIGKILL", timedOut: false, durationMs: 0,
 			})
+		}
+	})
+
+	// ── Terminal Handlers ──────────────────────────────────────────────────
+
+	/** Initialize a new terminal session */
+	socket.on(SocketEvent.TERMINAL_INIT, ({ cols, rows }: { cols: number; rows: number }) => {
+		console.log(`\n📡 [TERMINAL_INIT] Socket: ${socket.id.substring(0, 8)}... | Cols: ${cols}, Rows: ${rows}`)
+		
+		// Kill existing PTY if any
+		const existing = terminalProcesses.get(socket.id)
+		if (existing) {
+			try {
+				console.log(`   🔴 Killing existing PTY...`)
+				existing.kill()
+			} catch (e) {
+				console.warn(`   ⚠️  Failed to kill existing PTY:`, e)
+			}
+			terminalProcesses.delete(socket.id)
+		}
+
+		try {
+			// Determine working directory - prefer project root or user home
+			const workingDir = process.cwd()
+			console.log(`   📂 Working directory: ${workingDir}`)
+
+			// Spawn new PTY with proper configuration
+			console.log(`   🚀 Spawning bash with xterm-256color...`)
+			const ptyProcess = pty.spawn('bash', [], {
+				name: 'xterm-256color',
+				cols: Math.max(cols || 80, 40),
+				rows: Math.max(rows || 24, 10),
+				cwd: workingDir,
+				env: {
+					...process.env,
+					TERM: 'xterm-256color',
+					LANG: 'en_US.UTF-8',
+				},
+			})
+
+			terminalProcesses.set(socket.id, ptyProcess)
+			console.log(`   ✅ PTY spawned. PID: ${ptyProcess.pid}`)
+
+			// Forward PTY output to client
+			ptyProcess.onData((data: string) => {
+				console.log(`   📤 [PTY_OUTPUT] ${data.length} bytes | Sample: ${JSON.stringify(data.substring(0, 30))}${data.length > 30 ? '...' : ''}`)
+				socket.emit(SocketEvent.TERMINAL_OUTPUT, { data })
+			})
+
+			// Handle PTY exit/close
+			ptyProcess.onExit(({ exitCode, signal }: { exitCode: number; signal?: number }) => {
+				console.log(`   🔴 [PTY_EXIT] Exit code: ${exitCode}, Signal: ${signal}`)
+				socket.emit(SocketEvent.TERMINAL_EXIT, { exitCode, signal })
+				})
+
+			console.log(`✅ Terminal [${socket.id.substring(0, 8)}...] initialized successfully\n`)
+		} catch (error) {
+			console.error(`❌ Failed to initialize terminal [${socket.id}]:`, error)
+			socket.emit(SocketEvent.TERMINAL_EXIT, { exitCode: 1, signal: 0 })
+		}
+	})
+
+	/** Send input to terminal (user keystrokes or commands) */
+	socket.on(SocketEvent.TERMINAL_INPUT, ({ data }: { data: string }) => {
+		console.log(`📥 [TERMINAL_INPUT] Socket: ${socket.id.substring(0, 8)}... | Data: ${JSON.stringify(data)} (${data.length} bytes)`)
+		
+		const ptyProcess = terminalProcesses.get(socket.id)
+		if (!ptyProcess) {
+			console.warn(`   ⚠️  Terminal [${socket.id.substring(0, 8)}...] not found for input`)
+			return
+		}
+
+		try {
+			// Write user input directly to PTY stdin
+			// This allows all shell features: pipes, redirects, etc.
+			ptyProcess.write(data)
+			console.log(`   ✅ Input written to PTY`)
+		} catch (error) {
+			console.error(`   ❌ Failed to write to terminal [${socket.id}]:`, error)
+		}
+	})
+
+	/** Resize terminal when user resizes window */
+	socket.on(SocketEvent.TERMINAL_RESIZE, ({ cols, rows }: { cols: number; rows: number }) => {
+		console.log(`📐 [TERMINAL_RESIZE] Socket: ${socket.id.substring(0, 8)}... | ${cols}x${rows}`)
+		
+		const ptyProcess = terminalProcesses.get(socket.id)
+		if (!ptyProcess) {
+			console.warn(`   ⚠️  Terminal [${socket.id.substring(0, 8)}...] not found for resize`)
+			return
+		}
+
+		try {
+			ptyProcess.resize(Math.max(cols || 80, 40), Math.max(rows || 24, 10))
+			console.log(`   ✅ PTY resized`)
+		} catch (error) {
+			console.error(`   ❌ Failed to resize terminal [${socket.id}]:`, error)
 		}
 	})
 

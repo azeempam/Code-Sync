@@ -45,6 +45,18 @@ enum SocketEvent {
     RUN_ERROR   = "run:error",
     /** Server → Client: child process RSS exceeded the 500 MB threshold */
     RESOURCE_ALERT = "resource_alert",
+
+    // ── Terminal ──────────────────────────────────────────────────────────
+    /** Client → Server: initialize terminal session */
+    TERMINAL_INIT = "terminal:init",
+    /** Client → Server: send input to terminal */
+    TERMINAL_INPUT = "terminal:input",
+    /** Client → Server: resize terminal */
+    TERMINAL_RESIZE = "terminal:resize",
+    /** Server → Client: terminal output */
+    TERMINAL_OUTPUT = "terminal:output",
+    /** Server → Client: terminal exited */
+    TERMINAL_EXIT = "terminal:exit",
 }
 
 interface SocketContext {
