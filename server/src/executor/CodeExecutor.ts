@@ -41,6 +41,9 @@ const EXECUTION_TIMEOUT_MS = 5_000
 /** Max bytes accepted from stdout/stderr before the stream is force-closed. */
 const MAX_OUTPUT_BYTES = 512 * 1024   // 512 KB
 
+/** RSS threshold in MB — exceeding this fires onResourceAlert once per run. */
+const MEMORY_ALERT_MB = 500
+
 // ── Public types ───────────────────────────────────────────────────────────────
 
 export interface RunRequest {
@@ -59,6 +62,16 @@ export interface ExecutionCallbacks {
     onDone:       (payload: DonePayload) => void
     /** Called for infrastructure errors (bad language, write failure, etc.) */
     onError:      (message: string) => void
+    /**
+     * Called once when the child process RSS first exceeds MEMORY_ALERT_MB.
+     * Linux only (reads /proc/<pid>/statm); no-op on other platforms.
+     */
+    onResourceAlert?: (pid: number, rssMb: number) => void
+    /**
+     * Called after the process exits with the peak RSS seen during the run.
+     * Also logged to console by executeCode regardless of this callback.
+     */
+    onPeakMemory?: (pid: number, peakRssMb: number) => void
 }
 
 export interface DonePayload {
@@ -97,6 +110,63 @@ function rimraf(dir: string): void {
         fs.rmSync(dir, { recursive: true, force: true })
     } catch {
         /* best-effort cleanup */
+    }
+}
+
+// ── Memory watcher ─────────────────────────────────────────────────────────────
+
+interface MemWatcher {
+    /** Stop polling and fire onPeakMemory with the highest RSS seen. */
+    stop: () => void
+}
+
+/**
+ * Polls /proc/<pid>/statm every `intervalMs` ms (Linux only).
+ * Fires `onAlert` the *first* time RSS exceeds `thresholdMb`.
+ * Fires `onPeak` with peak RSS when stop() is called.
+ *
+ * Returns a no-op watcher when not on Linux or when pid is undefined.
+ */
+function startMemoryWatcher(
+    pid:         number | undefined,
+    thresholdMb: number,
+    onAlert:     ExecutionCallbacks["onResourceAlert"],
+    onPeak:      ExecutionCallbacks["onPeakMemory"],
+    intervalMs   = 500,
+): MemWatcher {
+    if (!pid || process.platform !== "linux") {
+        return { stop: () => { onPeak?.(pid ?? 0, 0) } }
+    }
+
+    let peakMb  = 0
+    let alerted = false
+
+    const handle = setInterval(() => {
+        try {
+            // /proc/<pid>/statm columns (all in memory pages, page = 4 KiB):
+            //   size  resident  shared  text  lib  data  dt
+            const raw      = fs.readFileSync(`/proc/${pid}/statm`, "utf8")
+            const resident = parseInt(raw.trim().split(/\s+/)[1], 10)
+            const rssMb    = (resident * 4096) / (1024 * 1024)
+
+            if (rssMb > peakMb) peakMb = rssMb
+
+            if (!alerted && rssMb > thresholdMb) {
+                alerted = true
+                onAlert?.(pid, Math.round(rssMb))
+            }
+        } catch {
+            /* /proc entry gone — the close event will call stop() */
+        }
+    }, intervalMs)
+
+    return {
+        stop: () => {
+            clearInterval(handle)
+            const rounded = Math.round(peakMb)
+            console.log(`[Aura-Next Executor] PID ${pid} peak memory: ${rounded} MB`)
+            onPeak?.(pid, rounded)
+        },
     }
 }
 
@@ -222,6 +292,14 @@ export async function executeCode(
     let outputBytes = 0
     let timedOut    = false
 
+    // ── 5b. Memory-alert watcher (auto-tracks PID, Linux only) ────────────
+    const memWatcher = startMemoryWatcher(
+        child.pid,
+        MEMORY_ALERT_MB,
+        callbacks.onResourceAlert,
+        callbacks.onPeakMemory,
+    )
+
     // ── 6. Pipe stdin ──────────────────────────────────────────────────────
     if (stdin && config.supportsStdin) {
         try {
@@ -257,6 +335,7 @@ export async function executeCode(
     // ── 10. Process exit ───────────────────────────────────────────────────
     child.on("close", (exitCode, signal) => {
         clearTimeout(watchdog)
+        memWatcher.stop()          // log peak + fire onPeakMemory
         rimraf(tmpDir)
         onDone({
             exitCode,
@@ -268,6 +347,7 @@ export async function executeCode(
 
     child.on("error", (err) => {
         clearTimeout(watchdog)
+        memWatcher.stop()
         rimraf(tmpDir)
         onError(`Process error: ${err.message}`)
     })

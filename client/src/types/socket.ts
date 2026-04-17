@@ -43,6 +43,8 @@ enum SocketEvent {
     RUN_DONE    = "run:done",
     /** Server → Client: infrastructure / unsupported-language error */
     RUN_ERROR   = "run:error",
+    /** Server → Client: child process RSS exceeded the 500 MB threshold */
+    RESOURCE_ALERT = "resource_alert",
 }
 
 interface SocketContext {

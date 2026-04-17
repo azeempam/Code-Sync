@@ -37,6 +37,33 @@ let userSocketMap: User[] = []
  */
 const runningJobs = new Map<string, ChildProcess>()
 
+/**
+ * Notify the Python resource-monitor server (localhost:5001) to start
+ * watching `pid` automatically — no manual PID entry needed in the UI.
+ * Uses Node's built-in `http` module so no extra dependency is required.
+ * Silently swallowed if the Python monitor is not running.
+ */
+function notifyMonitor(pid: number | undefined): void {
+	if (!pid) return
+	const body = JSON.stringify({ pid })
+	const req  = http.request(
+		{
+			hostname: "127.0.0.1",
+			port:     5001,
+			path:     "/start",
+			method:   "POST",
+			headers: {
+				"Content-Type":   "application/json",
+				"Content-Length": Buffer.byteLength(body),
+			},
+		},
+		() => { /* ignore response body */ }
+	)
+	req.on("error", () => { /* Python monitor not running — harmless */ })
+	req.write(body)
+	req.end()
+}
+
 // Function to get all users in a room
 function getUsersInRoom(roomId: string): User[] {
 	return userSocketMap.filter((user) => user.roomId == roomId)
