@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import Split from 'react-split'
 import EditorComponent from '../editor/EditorComponent'
 import Terminal from '../terminal/Terminal'
@@ -95,18 +95,6 @@ function TerminalIntegratedLayout() {
 				gutterSize={6}
 				gutter={getGutter}
 				style={{ display: 'flex', flexDirection: 'column', height: '100%' }}
-				panes={[
-					{
-						minSize: 300,
-						maxSize: Infinity,
-						style: { overflow: 'hidden' },
-					},
-					{
-						minSize: 100,
-						maxSize: Infinity,
-						style: { overflow: 'hidden' },
-					},
-				]}
 			>
 				{/* Editor Section */}
 				<div className="overflow-hidden">

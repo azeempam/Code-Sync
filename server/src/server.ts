@@ -10,6 +10,8 @@ import { ChildProcess } from "child_process"
 import { executeCode } from "./executor/CodeExecutor"
 import languageMap from "./executor/languageMap"
 import * as pty from "node-pty"
+import { setupDashboardEvents } from "./socket/dashboardEvents"
+import dashboardRoutes from "./routes/dashboard"
 
 dotenv.config()
 
@@ -20,6 +22,9 @@ app.use(express.json())
 app.use(cors())
 
 app.use(express.static(path.join(__dirname, "public"))) // Serve static files
+
+// Register dashboard routes
+app.use('/api/dashboard', dashboardRoutes)
 
 const server = http.createServer(app)
 const io = new Server(server, {
@@ -96,6 +101,9 @@ function getUserBySocketId(socketId: SocketId): User | null {
 	}
 	return user
 }
+
+// Setup dashboard events
+setupDashboardEvents(io)
 
 io.on("connection", (socket) => {
 	// Handle user actions

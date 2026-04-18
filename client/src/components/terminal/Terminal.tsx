@@ -1,11 +1,11 @@
-import React, { useEffect, useRef } from 'react'
+import { useEffect, useRef } from 'react'
 import { Terminal as XTerm } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import { SocketEvent } from '../../types/socket'
 import { useSocket } from '../../context/SocketContext'
 
-const Terminal: React.FC = () => {
+const Terminal = () => {
 	const containerRef = useRef<HTMLDivElement>(null)
 	const terminalRef = useRef<HTMLDivElement>(null)
 	const xtermRef = useRef<XTerm | null>(null)
@@ -44,7 +44,6 @@ const Terminal: React.FC = () => {
 					foreground: '#d4d4d4',
 					cursor: '#aeafad',
 					cursorAccent: '#1e1e1e',
-					selection: 'rgba(255, 255, 255, 0.15)',
 				},
 				scrollback: 2000,
 				fastScrollSensitivity: 2,

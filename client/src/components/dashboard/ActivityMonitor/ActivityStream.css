@@ -1,0 +1,164 @@
+.activity-stream {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background-color: #2d2d2d;
+  border-radius: 8px;
+  border: 1px solid #404040;
+  overflow: hidden;
+}
+
+.activity-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background-color: #1e1e1e;
+  border-bottom: 1px solid #404040;
+}
+
+.activity-header h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #e5e5e5;
+}
+
+.activity-count {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  background-color: #3b82f6;
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 600;
+  color: white;
+}
+
+.activity-list {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.activity-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.activity-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.activity-list::-webkit-scrollbar-thumb {
+  background: #404040;
+  border-radius: 3px;
+}
+
+.activity-list::-webkit-scrollbar-thumb:hover {
+  background: #505050;
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 24px 16px;
+  text-align: center;
+}
+
+.empty-state p {
+  margin: 0;
+  color: #9ca3af;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.empty-state .subtext {
+  margin-top: 4px;
+  font-size: 12px;
+  color: #6b7280;
+  font-weight: 400;
+}
+
+.activity-item {
+  display: flex;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid #3a3a44;
+  transition: background-color 0.2s ease;
+}
+
+.activity-item:hover {
+  background-color: #35343f;
+}
+
+.activity-item:last-child {
+  border-bottom: none;
+}
+
+.activity-icon {
+  display: flex;
+  align-items: flex-start;
+  padding-top: 2px;
+  flex-shrink: 0;
+}
+
+.activity-icon .icon {
+  width: 16px;
+  height: 16px;
+}
+
+.activity-icon .icon-create {
+  color: #10b981;
+}
+
+.activity-icon .icon-update {
+  color: #3b82f6;
+}
+
+.activity-icon .icon-comment {
+  color: #8b5cf6;
+}
+
+.activity-icon .icon-activity {
+  color: #f59e0b;
+}
+
+.activity-content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+
+.activity-message {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #e5e5e5;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.activity-message .user {
+  font-weight: 600;
+  color: #60a5fa;
+}
+
+.activity-message .message {
+  color: #d1d5db;
+  word-break: break-word;
+}
+
+.activity-time {
+  font-size: 11px;
+  color: #6b7280;
+  font-weight: 500;
+}

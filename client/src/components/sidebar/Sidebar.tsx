@@ -77,6 +77,10 @@ function Sidebar() {
                     icon={viewIcons[VIEWS.MONITOR]}
                 />
                 <SidebarButton
+                    viewName={VIEWS.DASHBOARD}
+                    icon={viewIcons[VIEWS.DASHBOARD]}
+                />
+                <SidebarButton
                     viewName={VIEWS.SETTINGS}
                     icon={viewIcons[VIEWS.SETTINGS]}
                 />

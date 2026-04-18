@@ -4,6 +4,7 @@ import FilesView from "@/components/sidebar/sidebar-views/FilesView"
 import RunView from "@/components/sidebar/sidebar-views/RunView"
 import SettingsView from "@/components/sidebar/sidebar-views/SettingsView"
 import UsersView from "@/components/sidebar/sidebar-views/UsersView"
+import DashboardView from "@/components/sidebar/sidebar-views/DashboardView"
 import ResourceMonitor from "@/components/monitor/ResourceMonitor"
 import useWindowDimensions from "@/hooks/useWindowDimensions"
 import { VIEWS, ViewContext as ViewContextType } from "@/types/view"
@@ -12,6 +13,7 @@ import { IoSettingsOutline } from "react-icons/io5"
 import { LuFiles, LuSparkles } from "react-icons/lu"
 import { PiChats, PiPlay, PiUsers } from "react-icons/pi"
 import { VscPulse } from "react-icons/vsc"
+import { MdDashboard } from "react-icons/md"
 
 const ViewContext = createContext<ViewContextType | null>(null)
 
@@ -35,6 +37,7 @@ function ViewContextProvider({ children }: { children: ReactNode }) {
         [VIEWS.CHATS]: <ChatsView />,
         [VIEWS.RUN]: <RunView />,
         [VIEWS.MONITOR]: <ResourceMonitor />,
+        [VIEWS.DASHBOARD]: <DashboardView />,
     })
     const [viewIcons] = useState({
         [VIEWS.FILES]: <LuFiles size={28} />,
@@ -44,6 +47,7 @@ function ViewContextProvider({ children }: { children: ReactNode }) {
         [VIEWS.COPILOT]: <LuSparkles size={28} />,
         [VIEWS.RUN]: <PiPlay size={28} />,
         [VIEWS.MONITOR]: <VscPulse size={26} />,
+        [VIEWS.DASHBOARD]: <MdDashboard size={28} />,
     })
 
     return (
