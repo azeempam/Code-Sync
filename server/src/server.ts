@@ -13,6 +13,8 @@ import * as pty from "node-pty"
 import { setupDashboardEvents } from "./socket/dashboardEvents"
 import dashboardRoutes from "./routes/dashboard"
 
+import { setupHealthMonitorEvents } from "./socket/healthMonitorEvents"
+import healthRoutes from "./routes/health"
 dotenv.config()
 
 const app = express()
@@ -25,6 +27,7 @@ app.use(express.static(path.join(__dirname, "public"))) // Serve static files
 
 // Register dashboard routes
 app.use('/api/dashboard', dashboardRoutes)
+app.use('/api/health', healthRoutes)
 
 const server = http.createServer(app)
 const io = new Server(server, {
@@ -104,6 +107,7 @@ function getUserBySocketId(socketId: SocketId): User | null {
 
 // Setup dashboard events
 setupDashboardEvents(io)
+setupHealthMonitorEvents(io)
 
 io.on("connection", (socket) => {
 	// Handle user actions
